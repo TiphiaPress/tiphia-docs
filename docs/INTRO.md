@@ -1,6 +1,6 @@
 # 什么是 TiphiaPress
 
-<img class="tiphia-mascot" src="../tiphia.png" alt="TiphiaPress 看板娘" />
+![Tiphia](tiphia.png)
 
 TiphiaPress 是一个以 Rust 后端和可拆分前端为核心的博客系统生态。它的目标不是简单复刻某个传统博客程序，而是提供一个适合现代前后端分离、插件化、主题化和长期维护的 Typecho 风格内容发布框架。
 
