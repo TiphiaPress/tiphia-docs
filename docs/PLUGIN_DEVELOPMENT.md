@@ -178,6 +178,101 @@ fn hooks(&self) -> HookMap {
 }
 ```
 
+
+## 命名空间扩展输入 extensions
+
+为了避免“每写一个插件就修改核心业务结构”，核心请求对象提供了通用 `extensions` 字段。插件作者应把自己的前端输入放在以插件名命名的对象下，后端插件只读取自己的命名空间。
+
+目前支持 `extensions` 的输入包括：
+
+| 输入结构 | 常见 Hook | 用途示例 |
+| --- | --- | --- |
+| `LoginInput` | `BeforeAuthLogin` | MFA、验证码、登录风控。 |
+| `RegisterInput` | `BeforeAuthRegister` | 注册验证码、邀请码、邮箱域名限制。 |
+| `CreateCommentInput` | `BeforeCommentCreate` | 评论验证码、反垃圾、匿名访客扩展字段。 |
+| `CreatePostInput` | `BeforePostCreate` / `BeforePageCreate` | SEO 字段、自定义字段、同步外部平台。 |
+| `UpdatePostInput` | `BeforePostUpdate` | SEO 字段更新、自定义字段更新、搜索索引控制。 |
+| `ChangePostStatusInput` | 状态变更流程 | 发布同步、定时发布扩展。 |
+| `BulkPostActionInput` | 批量内容操作 | 批量同步、批量清理插件数据。 |
+| `CreateTermInput` / `UpdateTermInput` | 分类标签创建/更新 | 分类图标、导航扩展、外部映射 ID。 |
+| `SyncPostTermsInput` | `BeforePostTermsSync` | 专题同步、分类关系扩展。 |
+
+请求示例：
+
+```json
+{
+  "title": "一篇文章",
+  "markdown": "正文",
+  "extensions": {
+    "tiphia-seo": {
+      "canonical_url": "https://example.com/post",
+      "robots": "index,follow"
+    },
+    "tiphia-webhook": {
+      "notify": true
+    }
+  }
+}
+```
+
+插件读取示例：
+
+```rust
+use tiphia_core::{
+    plugins::{Hook, HookContext},
+    services::{auth::plugin_extension, posts::CreatePostInput},
+    AppResult,
+};
+
+async fn handle(&self, hook: Hook, context: &mut HookContext) -> AppResult<()> {
+    if hook != Hook::BeforePostCreate {
+        return Ok(());
+    }
+
+    let Some(input) = context.subject_as::<CreatePostInput>()? else {
+        return Ok(());
+    };
+
+    if let Some(payload) = plugin_extension(&input.extensions, self.manifest().name) {
+        // 只处理本插件的 payload
+    }
+
+    Ok(())
+}
+```
+
+兼容说明：旧版 GeeTest 曾使用顶层 `captcha` 字段。该字段暂时保留，但新插件应优先使用 `extensions[plugin-name]`。
+
+## HookContext metadata
+
+`subject` 表示核心业务输入或输出；`meta` 表示请求体之外的上下文，例如当前文章 ID、作者 ID、权限信息。插件不要为了拿这些上下文去反查或要求核心 DTO 添加字段，而应读取 metadata。
+
+读取示例：
+
+```rust
+let post_id = context.meta_as::<i32>("post_id")?;
+let can_publish = context.meta_as::<bool>("can_publish")?.unwrap_or(false);
+```
+
+当前 metadata 约定：
+
+| Hook | metadata |
+| --- | --- |
+| `BeforePostCreate` | `author_id`、`can_publish`、`post_type` |
+| `BeforePostUpdate` | `post_id`、`can_publish` |
+| `AfterPostUpdate` | `post_id` |
+| `BeforeTermUpdate` | `term_id` |
+| `AfterTermUpdate` | `term_id` |
+| `BeforePostTermsSync` | `post_id`、`extensions` |
+| `AfterPostTermsSync` | `post_id`、`extensions` |
+
+设计建议：
+
+- 插件自己的表单字段放 `extensions[plugin-name]`。
+- 当前用户、文章 ID、权限、来源等执行上下文放 metadata。
+- Before Hook 可以修改 subject；After Hook 通常只做副作用。
+- 插件需要持久化时使用插件自有表或 options key，不要污染核心表结构。
+
 ### admin_menu
 
 签名：

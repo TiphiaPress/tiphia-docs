@@ -36,6 +36,29 @@ After Hook 常见数据流：
 Saved Model -> HookContext.subject -> plugin reads subject -> audit / notification / sync
 ```
 
+
+## 扩展输入与 metadata
+
+插件扩展数据分为两层：
+
+- `subject.extensions`：来自请求体，属于插件自己的输入，例如验证码结果、SEO 字段、自定义字段。
+- `HookContext.meta`：核心流程附带的上下文，例如 `post_id`、`author_id`、`can_publish`。
+
+插件读取扩展输入：
+
+```rust
+let Some(input) = context.subject_as::<CreatePostInput>()? else { return Ok(()); };
+let payload = plugin_extension(&input.extensions, "tiphia-example");
+```
+
+插件读取 metadata：
+
+```rust
+let post_id = context.meta_as::<i32>("post_id")?;
+```
+
+这套模式的目标是让插件开发者只关注插件自身，不需要修改文章、评论、用户等业务结构。
+
 ## AppBooting
 
 应用启动中。适合检查插件配置、准备内存状态。
