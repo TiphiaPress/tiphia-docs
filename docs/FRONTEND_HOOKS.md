@@ -114,3 +114,108 @@ registerFrontendPlugin({
 ```
 
 插件语言资源可以覆盖核心文案，也可以只提供插件自己的 key。
+## 三方职责
+
+前端 Hook 涉及三方：
+
+- 前端骨架：提供 `registerFrontendPlugin`、`FrontendHookSlot`、插件启用过滤、i18n 注册和 head effect 生命周期管理。
+- 主题：决定把 `FrontendHookSlot` 放在哪里，并把当前页面上下文传给 slot。
+- 插件：注册 hook 渲染函数、head 副作用、后台配置面板和语言包。
+
+主题不应该知道某个具体插件如何实现；插件也不应该直接改主题源码。二者通过 hook name 和 context 协作。
+
+## Context 约定
+
+Hook 的 `context` 是普通对象。主题放置 slot 时应尽量传入足够的上下文，例如：
+
+```tsx
+<FrontendHookSlot
+  hook="blog.post.content.after"
+  context={{ post, settings, themeConfig }}
+/>
+```
+
+插件读取 context 时要保持防御式写法：
+
+```tsx
+render: (context) => {
+  const post = context.post as Post | undefined;
+  if (!post) return null;
+  return <RelatedPosts postId={post.id} />;
+}
+```
+
+不要假设所有主题都会传同样的字段。需要强依赖某个字段时，应在插件 README 中说明。
+
+## 插件启用状态与名称映射
+
+前端插件可以声明多个后端名称别名：
+
+```tsx
+registerFrontendPlugin({
+  name: "tiphia-links",
+  backendNames: ["tiphia-plugin-links"],
+  hooks: []
+});
+```
+
+骨架会读取后端 `/api/v1/plugins` 的启用状态，只让已启用的插件参与 hook 渲染。纯前端插件也可以不声明后端别名，但如果它需要后台配置或后端 API，推荐始终提供后端插件。
+
+## 后台配置面板
+
+插件配置面板由前端插件注册：
+
+```tsx
+registerFrontendPlugin({
+  name: "tiphia-geetest",
+  backendNames: ["tiphia-plugin-geetest"],
+  adminConfigPanel: GeetestConfigPanel
+});
+```
+
+配置面板应只负责 UI 和校验。保存动作由后台插件配置页提供的 `value`、`onChange`、`onSave` 等能力完成。配置结构必须与后端插件 schema 和 README 保持一致。
+
+## i18n Hook
+
+插件可以注册语言包：
+
+```tsx
+registerFrontendPlugin({
+  name: "my-language-pack",
+  i18n: {
+    locales: [{ code: "ja-JP", label: "日本語" }],
+    resources: {
+      "ja-JP": {
+        "nav.dashboard": "ダッシュボード",
+        "my_plugin.title": "タイトル"
+      }
+    }
+  }
+});
+```
+
+规则：
+
+- 插件可以新增语言，也可以覆盖核心 key。
+- 插件自己的文案建议使用插件名前缀，例如 `tiphia_links.title`。
+- 覆盖核心 key 时要谨慎，避免影响其它插件和主题。
+
+## Head effect 生命周期
+
+`head` 适合插入 SDK、统计脚本、验证码脚本、预连接和 meta 信息。每个 effect 必须提供稳定 `id`，并尽量返回清理函数：
+
+```tsx
+head: [
+  {
+    id: "geetest-sdk",
+    run: () => {
+      const script = document.createElement("script");
+      script.src = "https://static.geetest.com/v4/gt4.js";
+      document.head.appendChild(script);
+      return () => script.remove();
+    }
+  }
+]
+```
+
+如果脚本由多个页面共用，插件应避免重复插入，并处理网络失败、SDK 不存在、配置为空等情况。

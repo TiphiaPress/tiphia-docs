@@ -5,6 +5,7 @@ const groups = [
       { id: "intro", title: "什么是 TiphiaPress", file: "docs/INTRO.md" },
       { id: "deployment", title: "部署方式", file: "docs/DEPLOYMENT.md" },
       { id: "development", title: "开发文档", file: "docs/DEVELOPMENT.md" },
+      { id: "frontend", title: "前端架构", file: "docs/FRONTEND.md" },
     ],
   },
   {
@@ -20,6 +21,7 @@ const groups = [
     pages: [
       { id: "plugins", title: "插件开发文档", file: "docs/PLUGIN_DEVELOPMENT.md" },
       { id: "themes", title: "主题开发文档", file: "docs/THEME_DEVELOPMENT.md" },
+      { id: "default-theme", title: "默认主题配置", file: "docs/THEMES.md" },
       { id: "migration", title: "从 Typecho 迁移", file: "docs/TYPECHO_MIGRATION.md" },
     ],
   },
@@ -136,3 +138,4 @@ function safeHref(href) {
 function escapeHtml(value) {
   return value.replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char]));
 }
+

@@ -106,3 +106,121 @@ public/themes/default/favicon.ico
 2. 开发时复制到 `tiphia-frontend/src/themes/default` 或使用 Git submodule 链接。
 3. 主题仓库自己维护 README、截图和配置示例。
 4. 前端仓库只负责装配主题，不把主题规则写死在后端。
+
+## 主题配置 Panel
+
+新版前端支持主题像插件一样提供自己的后台配置面板。这样用户不需要编辑 JSON，也不需要修改前端代码。后台主题页会优先读取主题对象上的 `ConfigPanel`。
+
+主题类型定义位于前端仓库：
+
+```ts
+export interface ThemeConfigPanelProps {
+  theme: BlogTheme;
+  value: Record<string, unknown>;
+  saving: boolean;
+  error?: unknown;
+  onSubmit: (value: Record<string, unknown>) => Promise<void> | void;
+}
+
+export type ThemeConfigPanel = ComponentType<ThemeConfigPanelProps>;
+
+export interface BlogTheme {
+  name: string;
+  faviconUrl?: string;
+  ConfigPanel?: ThemeConfigPanel;
+  Layout: BlogThemeLayout;
+  views: BlogThemeViews;
+}
+```
+
+最小示例：
+
+```tsx
+import { useEffect, useState } from "react";
+import type { ThemeConfigPanelProps } from "../types";
+
+export function MyThemeConfigPanel({ value, saving, error, onSubmit }: ThemeConfigPanelProps) {
+  const [accent, setAccent] = useState("#2563eb");
+
+  useEffect(() => {
+    setAccent(typeof value.accent === "string" ? value.accent : "#2563eb");
+  }, [value]);
+
+  return (
+    <form onSubmit={(event) => {
+      event.preventDefault();
+      onSubmit({ accent });
+    }}>
+      <label>
+        强调色
+        <input type="color" value={accent} onChange={(event) => setAccent(event.target.value)} />
+      </label>
+      {error instanceof Error ? <p>{error.message}</p> : null}
+      <button disabled={saving}>{saving ? "保存中..." : "保存配置"}</button>
+    </form>
+  );
+}
+```
+
+注册主题时挂载：
+
+```ts
+const themes: Record<string, BlogTheme> = {
+  default: {
+    name: "default",
+    faviconUrl,
+    ConfigPanel: DefaultThemeConfigPanel,
+    Layout: DefaultThemeLayout,
+    views,
+  },
+};
+```
+
+后台保存时会把 `onSubmit` 传入的对象写入 `site:settings.theme.configs[themeName]`。如果当前主题已启用，同时会同步到 `site:settings.theme.config`。
+
+### 配置 Panel 设计建议
+
+- Panel 只负责 UI、输入规范化和简单校验，不直接调用后端 API 保存配置。
+- 配置字段要尽量表单化，避免要求用户手写 JSON。
+- 删除、启用、停用主题配置由后台主题页统一提供，主题 Panel 不应重复实现。
+- 对复杂数组配置，例如导航页面、页脚链接、置顶文章，建议提供“添加/删除”行式表单。
+- 所有字段都应能从空配置安全初始化。
+
+## 默认主题视图拆分
+
+默认主题目前按视图拆分：
+
+```text
+src/themes/default/
+  index.tsx
+  ThemeConfigPanel.tsx
+  theme.css
+  views/
+    ArticleViews.tsx
+    CommentViews.tsx
+    HomeView.tsx
+    RegisterView.tsx
+    TermViews.tsx
+    TimelineView.tsx
+  components/
+```
+
+主题作者可以参考这种结构：
+
+- `index.tsx`：布局和主题入口。
+- `views/`：页面级视图，接收骨架 props。
+- `components/`：主题内复用组件。
+- `ThemeConfigPanel.tsx`：后台主题配置 UI。
+- `theme.css`：主题全部样式，包括 Markdown 内容样式。
+
+## Markdown 内容处理
+
+主题负责正文内容的视觉呈现。默认主题已经处理：
+
+- 图片最大宽度和居中。
+- Markdown 图片 `![说明](url)` 的 `alt` 会渲染为图片下方居中说明。
+- 表格边框、间距和横向滚动。
+- 多级标题尺寸。
+- 外站链接跳转提示。
+
+如果主题自行渲染 `dangerouslySetInnerHTML`，应确保图片、表格、代码块、长链接不会破坏布局。
