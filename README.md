@@ -16,6 +16,7 @@ The documentation is organized by task instead of by repository internals:
 - `前端`: frontend shell, admin development, and frontend hooks.
 - `后端`: backend development and backend hooks.
 - `扩展生态`: plugin development, plugin config UI, theme development, and default theme configuration.
+- `协作规范`: branch model, commit message convention, merge rules, and development standards.
 - `迁移`: Typecho migration workflow and import tool reference.
 
 ## Suggested Reading Order
@@ -38,6 +39,12 @@ For development:
 5. `docs/development/FRONTEND.md`
 6. `docs/ecosystem/PLUGIN_DEVELOPMENT.md`
 7. `docs/ecosystem/THEME_DEVELOPMENT.md`
+
+For contributors:
+
+1. `docs/development/CONTRIBUTING.md` for branch, commit, merge and release rules.
+2. `docs/development/DEVELOPMENT.md` for repository workflow.
+3. `docs/development/BACKEND_DEVELOPMENT.md` and `docs/development/FRONTEND.md` for code placement conventions.
 
 For extension authors:
 
