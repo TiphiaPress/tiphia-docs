@@ -132,3 +132,43 @@ main { margin-left: 302px; min-height: 100vh; }
     margin: 0 0 22px;
   }
 }
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin: 18px 0 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.content table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  line-height: 1.62;
+}
+
+.content th,
+.content td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.content th {
+  background: #f8fafc;
+  color: var(--text);
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.content tr:last-child td {
+  border-bottom: 0;
+}
+
+.content td {
+  color: #334155;
+}

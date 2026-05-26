@@ -66,6 +66,7 @@ function renderMarkdown(markdown) {
   let codeLines = [];
   let list = [];
   let ordered = [];
+  let table = [];
 
   function flushLists() {
     if (list.length) {
@@ -78,13 +79,38 @@ function renderMarkdown(markdown) {
     }
   }
 
+  function flushTable() {
+    if (!table.length) return;
+    const rows = table.map(splitTableRow).filter((row) => row.length);
+    table = [];
+    if (!rows.length) return;
+
+    const separatorIndex = rows.findIndex(isTableSeparatorRow);
+    if (separatorIndex !== 1) {
+      rows.forEach((row) => blocks.push(`<p>${inline(row.join(" | "))}</p>`));
+      return;
+    }
+
+    const header = rows[0];
+    const body = rows.slice(2);
+    blocks.push(
+      `<div class="table-wrap"><table><thead><tr>${header.map((cell) => `<th>${inline(cell)}</th>`).join("")}</tr></thead>` +
+      `<tbody>${body.map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`
+    );
+  }
+
+  function flushFlow() {
+    flushLists();
+    flushTable();
+  }
+
   markdown.split(/\r?\n/).forEach((line) => {
     if (line.startsWith("```")) {
       if (code) {
         blocks.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
         codeLines = [];
       } else {
-        flushLists();
+        flushFlow();
       }
       code = !code;
       return;
@@ -94,35 +120,59 @@ function renderMarkdown(markdown) {
       return;
     }
     if (!line.trim()) {
+      flushFlow();
+      return;
+    }
+    if (isTableLine(line)) {
       flushLists();
+      table.push(line.trim());
       return;
     }
     const heading = line.match(/^(#{1,4})\s+(.+)$/);
     if (heading) {
-      flushLists();
+      flushFlow();
       const level = heading[1].length;
       blocks.push(`<h${level}>${inline(heading[2])}</h${level}>`);
       return;
     }
     const bullet = line.match(/^[-*]\s+(.+)$/);
     if (bullet) {
+      flushTable();
       ordered = [];
       list.push(bullet[1]);
       return;
     }
     const orderedItem = line.match(/^\d+\.\s+(.+)$/);
     if (orderedItem) {
+      flushTable();
       list = [];
       ordered.push(orderedItem[1]);
       return;
     }
-    flushLists();
+    flushFlow();
     blocks.push(`<p>${inline(line)}</p>`);
   });
-  flushLists();
+  flushFlow();
   return blocks.join("\n");
 }
 
+function isTableLine(line) {
+  const value = line.trim();
+  return value.startsWith("|") && value.endsWith("|") && value.includes("|");
+}
+
+function splitTableRow(line) {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function isTableSeparatorRow(row) {
+  return row.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
 function inline(value) {
   return escapeHtml(value)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
