@@ -255,3 +255,35 @@ Before Hook 可以读取登录输入中的 `captcha` 字段。GeeTest 插件就�
 - 审计、通知、统计类插件不要阻断核心发布流程，除非这是设计目标。
 - 安全、验证码、反垃圾插件可以调用 `stop` 阻断流程。
 - Hook 逻辑应有单元测试。
+## 业务解耦建议
+
+后端 Hook 的目标是让插件作者不用修改核心业务代码。遇到以下需求时，应优先考虑 Hook 或扩展上下文：
+
+| 需求 | 推荐扩展点 |
+| --- | --- |
+| 登录前增加二次验证 | `BeforeAuthIssueToken` 或认证扩展 context |
+| 登录成功后记录审计日志 | `AfterAuthLogin` |
+| 评论提交前做验证码/敏感词/频率控制 | `BeforeCommentCreate` |
+| 评论入库后通知外部服务 | `AfterCommentCreate` |
+| 文章保存前补充 slug/SEO 信息 | `BeforePostSave` |
+| 文章发布后生成索引或通知搜索服务 | `AfterPostPublish` |
+| 渲染 HTML 后追加处理 | `AfterPostRender` |
+
+设计 Hook 时需要注意：
+
+- Hook 名称应描述业务时机，而不是某个插件名。
+- Context 里可以带 `extensions: serde_json::Value`，让前端插件传递验证码、二次验证 token 等扩展数据。
+- Hook 返回错误时必须使用核心 `AppError`，不要 panic。
+- Hook 执行顺序由 priority 控制，安全类插件通常应较早执行。
+- 默认插件应禁用，启用状态由后台插件管理。未启用插件不应影响核心流程。
+
+## 与前端 Hook 的关系
+
+后端 Hook 解决“业务流程扩展”，前端 Hook 解决“页面插入 UI”。例如验证码插件需要两边配合：
+
+1. 前端插件在 `admin.auth.captcha` 或 `blog.comment.captcha` 插入验证码组件。
+2. 前端提交登录、注册或评论时，把验证码结果放到 `extensions`。
+3. 后端插件在认证或评论 Hook 中读取 `extensions` 并验证。
+4. 验证失败时返回结构化错误，前端表单展示提示。
+
+这样新增验证码、二次认证或风控插件时，不需要再硬编码到登录页或评论页中。

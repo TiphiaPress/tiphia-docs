@@ -754,3 +754,106 @@ registerFrontendPlugin({
 - 不返回敏感配置，例如密钥。
 - 写单元测试覆盖配置解析和关键 Hook。
 - README 说明配置字段、API、Hook 和安全注意事项。
+## 前后端插件交付约定
+
+一个完整插件通常包含两部分：
+
+```text
+后端插件仓库或目录：
+  plugins/tiphia-plugin-example/
+    Cargo.toml
+    README.md
+    src/lib.rs
+
+前端插件目录：
+  tiphia-frontend/src/plugins/tiphia-example/
+    index.tsx
+    ExampleConfigPanel.tsx
+    styles.css
+    README.md
+```
+
+后端插件负责：
+
+- manifest、安装、迁移、配置 schema。
+- 后端 Hook，例如文章发布前、评论创建前、登录后验证等。
+- 插件公开 API 或后台 API，例如 `/api/v1/example/status`。
+- 持久化配置和数据。
+
+前端插件负责：
+
+- 注册 `registerFrontendPlugin`。
+- 声明 `backendNames`，让前端能根据后端启用状态过滤插件。
+- 提供后台配置面板。
+- 注册前台/后台 hook UI。
+- 通过统一 API client 调用后端插件路由。
+
+插件作者不应要求用户修改核心业务代码。需要核心流程扩展时，应优先检查是否已有后端 Hook；没有就向核心新增通用 Hook，而不是在某个插件里硬改登录、评论或文章服务。
+
+## 插件配置与默认禁用
+
+插件默认状态应为禁用。安装插件时可以写入默认配置，但不应自动开启高风险行为。
+
+推荐：
+
+```rust
+ensure_plugin_config(db, self.manifest().name, serde_json::json!({
+    "enabled": false,
+    "verify_login": false
+})).await
+```
+
+插件配置要求：
+
+- README 必须提供完整 JSON 示例。
+- 后台配置 Panel 必须能从空配置安全初始化。
+- 后端路由读取配置时要做类型兜底，不能因为用户保存了非法 JSON 就 panic。
+- 如果配置为空但插件被启用，例如 GeeTest 未填写 `captcha_id`，插件应当视为“不生效”，而不是阻断登录或评论。
+
+## 插件 API 与前端调用
+
+插件 API 应遵守核心 REST 风格：
+
+```text
+GET    /api/v1/<plugin>/status
+GET    /api/v1/<plugin>/config-public
+POST   /api/v1/<plugin>/setup
+PUT    /api/v1/<plugin>/config
+DELETE /api/v1/<plugin>/items/{id}
+```
+
+公开接口和后台接口要分清楚：
+
+- 公开博客可访问的接口不要返回密钥、secret、内部配置。
+- 后台配置接口必须鉴权，并按角色校验权限。
+- 需要登录态的插件接口应复用核心认证 extractor，不要自己解析 JWT。
+- 前端插件调用接口时必须使用统一 API base，不要硬编码域名。
+
+## Hook 设计原则
+
+新增 Hook 时优先考虑“通用上下文”，不要为某个具体插件定制过窄接口。
+
+好例子：
+
+```rust
+Hook::BeforeAuthIssueToken
+Hook::AfterAuthLogin
+Hook::BeforeCommentCreate
+Hook::AfterPostRender
+```
+
+不好的例子：
+
+```rust
+Hook::BeforeGoogleAuthenticatorLoginOnly
+Hook::AfterLinksPluginSave
+```
+
+Hook context 应提供：
+
+- 当前用户或匿名身份。
+- 输入数据的可变引用或扩展字段。
+- 请求来源信息，例如 IP、User-Agent。
+- 可选插件扩展字段 `extensions`，用于验证码、二次验证等扩展。
+
+如果插件需要阻断流程，应返回结构化错误，前端才能展示友好的提示。

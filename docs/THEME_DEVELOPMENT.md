@@ -15,19 +15,23 @@ tiphia-frontend/src/themes/default/
   README.md
 ```
 
-如果主题有静态资源，例如 favicon，应放在前端 public 目录中：
+如果主题有静态资源，例如 favicon、logo、背景图或局部 CSS，应放在主题目录中，并由主题模块显式导入：
 
 ```text
-public/themes/default/favicon.ico
+tiphia-frontend/src/themes/default/
+  favicon.ico
+  logo.png
+  theme.css
 ```
 
-前端会自动读取：
+示例：
 
-```text
-/themes/{themeName}/favicon.ico
+```ts
+import faviconUrl from "./favicon.ico";
+import "./theme.css";
 ```
 
-不需要在主题 JSON 里配置 favicon。
+前端 registry 应把 `faviconUrl` 挂到主题对象上。不要依赖全局 `public/themes/...` 约定，也不要要求用户额外复制静态文件。
 
 ## 主题组件
 
@@ -224,3 +228,29 @@ src/themes/default/
 - 外站链接跳转提示。
 
 如果主题自行渲染 `dangerouslySetInnerHTML`，应确保图片、表格、代码块、长链接不会破坏布局。
+## 主题部署与子模块
+
+主题可以独立仓库维护，再作为 Git submodule 放入前端仓库：
+
+```bash
+git submodule add https://github.com/TiphiaPress/tiphia-default-themes src/themes/default
+```
+
+主题作为 submodule 时要注意：
+
+- 主题目录必须包含前端 registry 需要的入口文件，例如 `index.tsx`、`ThemeConfigPanel.tsx`、`theme.css`、`favicon.ico`。
+- 如果前端 registry 中导入了 `./default/ThemeConfigPanel`，主题仓库就必须提供该文件，或者 registry 要改成可选导入。
+- 主题自己的 README 要写清楚配置字段、支持的 Hook、截图和依赖。
+- 主题不应把资源放到前端仓库的其它目录，否则 submodule 更新时会丢文件。
+
+## 主题配置兼容策略
+
+主题配置是自由 JSON，因此主题作者必须处理旧配置和空配置：
+
+- 新字段必须有默认值。
+- 删除字段时要兼容旧配置，不要直接崩溃。
+- 布尔值用严格判断，例如 `config.liquid_glass === true`。
+- 数字配置要做范围限制，例如 `posts_per_page` 限制在 `1..100`。
+- 数组配置要过滤非法项，例如 `nav_pages` 中缺少 `label` 或 `slug` 的项应忽略。
+
+默认主题配置 Panel 应尽量覆盖常用字段，避免要求用户手写 JSON。

@@ -172,3 +172,65 @@ const themes: Record<string, BlogTheme> = {
 - 无权限接口对应的页面和入口不应展示，但后端仍必须做权限校验。
 
 后台样式不是主题的一部分。主题作者不应修改后台 CSS；插件配置面板可以使用后台已有类名，例如 `plugin-config-panel`、`config-grid`、`editable-row`、`field`、`form-actions`。
+## API Base 与部署环境
+
+前端所有后台、博客和插件公共请求都应通过统一 API base resolver。不要在页面、主题或插件里手写 `http://127.0.0.1:3000`。
+
+解析优先级：
+
+1. `window.__TIPHIA_API_BASE__`：运行时覆盖，适合同一份 `dist/` 多环境部署。
+2. `import.meta.env.VITE_TIPHIA_API_BASE`：构建时注入，适合 CI/CD 和 `.env.production`。
+3. 空字符串：同源请求，例如 `/api/v1/posts`。
+
+推荐写法：
+
+```ts
+import { requestPublic } from "../../framework/public-api";
+
+export function listLinks() {
+  return requestPublic("/api/v1/links");
+}
+```
+
+不要写：
+
+```ts
+fetch("http://127.0.0.1:3000/api/v1/links");
+```
+
+开发环境可以在 `.env.local` 中写本地 API：
+
+```bash
+VITE_TIPHIA_API_BASE=http://127.0.0.1:3000
+```
+
+生产环境推荐 `.env.production` 留空，并由 Nginx 反代 `/api/`：
+
+```bash
+VITE_TIPHIA_API_BASE=
+```
+
+如果前端插件需要调用自己的后端插件路由，也必须复用统一请求方法。这样插件在同源反代、独立 API 域名、运行时覆盖三种部署方式下都能工作。
+
+## 静态部署检查清单
+
+发布前端时检查：
+
+- `.env.production` 或 CI/CD 变量中没有开发地址。
+- `VITE_TIPHIA_FRONTEND_BASE` 与部署路径一致，根路径使用 `/`。
+- Nginx 已配置 SPA fallback，否则 `/admin` 刷新会 404。
+- 如果 API 同源，Nginx 已配置 `/api/` proxy。
+- 如果 API 跨域，后端 CORS 已允许前端来源。
+- 部署后清理 CDN 的 `index.html` 缓存。
+- 浏览器控制台请求地址应是 `/api/v1/...` 或真实 API 域名，不应是 `127.0.0.1`。
+
+## 主题与插件资产规则
+
+前端不再依赖全局 `public/` 目录分散主题和插件资产。规则如下：
+
+- 主题 favicon、CSS、图片、局部组件放在 `src/themes/<theme>/`。
+- 插件配置面板、运行时代码、CSS、图片放在 `src/plugins/<plugin>/`。
+- 主题或插件需要暴露静态 URL 时，应通过 bundler import，例如 `import logoUrl from "./logo.png"`。
+- 不要让主题去读取 `/themes/<name>/favicon.ico` 这种外部约定；主题 registry 应显式导入并提供 `faviconUrl`。
+
+这样主题仓库被复制或作为 Git submodule 放入前端仓库时，文件不会散落到其它目录，后续升级也更容易。

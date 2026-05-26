@@ -20,6 +20,19 @@ The documentation covers:
 - Theme development.
 - Typecho migration.
 
+
+## Suggested Reading Order
+
+For deployment, start with `docs/DEPLOYMENT.md`; it now covers Docker, config-file-only deployment, Nginx reverse proxy, frontend static build variables, cross-origin mode, cache invalidation, Redis, and common failure cases.
+
+For development, read these in order:
+
+1. `docs/DEVELOPMENT.md` for repository workflow and feature placement rules.
+2. `docs/FRONTEND.md` for the frontend shell, theme, plugin and API base conventions.
+3. `docs/FRONTEND_HOOKS.md` and `docs/BACKEND_HOOKS.md` for extension points.
+4. `docs/PLUGIN_DEVELOPMENT.md` and `docs/THEME_DEVELOPMENT.md` for ecosystem development.
+5. `docs/THEMES.md` for default theme configuration.
+
 ## Local Preview
 
 ```bash

@@ -2,6 +2,18 @@
 
 TiphiaPress 推荐后端和前端分开部署。后端只提供 API、认证、插件后端能力、迁移工具和日志；前端是独立静态资源，应单独构建并部署到静态托管或 Nginx。
 
+## 部署场景速查
+
+| 场景 | 后端 | 前端 | API Base | Nginx/CORS 要点 |
+| --- | --- | --- | --- | --- |
+| 单机 Docker + Nginx | Docker 暴露 `127.0.0.1:7999` | Nginx 静态目录 | `VITE_TIPHIA_API_BASE=` | Nginx `location /api/` 反代到后端；后端 CORS 写前端域名。 |
+| 前后端同域同 Nginx | 后端仅监听内网端口 | 同一个域名静态资源 | 空 | 最推荐；浏览器请求 `/api/v1/...`，不产生跨域。 |
+| 前后端不同域 | 后端独立域名 `api.example.com` | 前端独立域名 `blog.example.com` | `https://api.example.com` | 后端 `cors.allowed_origins` 必须包含 `https://blog.example.com`。 |
+| CDN/对象存储静态部署 | 后端在 VPS 或容器 | CDN/对象存储 | 独立 API 域名或运行时覆盖 | 不能依赖同源 `/api/`，除非 CDN 支持路径回源到后端。 |
+| 本地开发 | `cargo run` | `yarn dev` | `http://127.0.0.1:3000` 或 Vite proxy | 开发环境可用本地地址；不要把该值打进生产包。 |
+| 内网/反代多实例 | 多个后端实例 + Redis | 静态资源 | 同源或独立 API | 多实例必须配置 Redis 限流；反代要保留 `X-Forwarded-*`。 |
+
+选择原则：能同源就同源，能让前端请求 `/api/` 就不要把 `127.0.0.1`、内网 IP 或临时端口写进生产前端包。
 ## Release 配置文件
 
 生产环境不要直接使用 `tiphia.example.toml`。建议复制一份到宿主机持久目录，例如：
@@ -143,6 +155,31 @@ redis_url = ""
 ```
 
 注意：环境变量优先级高于配置文件。如果你已经在 `docker run`、`docker compose.yml`、systemd 或宿主机环境里设置了同名覆盖变量，最终生效的会是环境变量，而不是 TOML。
+### Docker Compose 只使用配置文件
+
+如果使用 Compose，也可以只挂载 TOML，不在 `environment` 中写业务配置：
+
+```yaml
+services:
+  tiphia:
+    image: tiphia:latest
+    restart: unless-stopped
+    ports:
+      - "7999:3000"
+    volumes:
+      - /etc/tiphia/config/tiphia.toml:/app/tiphia.toml:ro
+      - /etc/tiphia/data:/app/data
+      - /etc/tiphia/logs:/app/logs
+```
+
+这种方式的优点是所有 release 配置都集中在 `/etc/tiphia/config/tiphia.toml`，便于备份和审计。缺点是敏感信息如 `jwt_secret`、数据库密码也会写在 TOML 中，所以该文件权限应限制为管理员可读：
+
+```bash
+sudo chown root:root /etc/tiphia/config/tiphia.toml
+sudo chmod 600 /etc/tiphia/config/tiphia.toml
+```
+
+如果你希望敏感项不落盘，可以只把 `TIPHIA_JWT_SECRET`、`DATABASE_URL`、`TIPHIA_REDIS_URL` 放到环境变量，其余配置仍放在 TOML。这是“配置文件为主，敏感项环境变量覆盖”的折中方式。
 
 ## Docker Release 部署
 
@@ -558,6 +595,40 @@ allowed_origins = ["https://posts.example.com"]
 
 `window.__TIPHIA_API_BASE__` 的优先级高于构建时的 `VITE_TIPHIA_API_BASE`。如果留空或不设置，则使用同源请求。
 
+### 前端部署到子路径
+
+如果前端不是部署在域名根路径，而是部署在 `/blog/`、`/tiphia/` 这样的子路径，需要设置：
+
+```bash
+VITE_TIPHIA_FRONTEND_BASE=/blog/
+```
+
+并且 Nginx 要把该子路径也回退到对应的 `index.html`：
+
+```nginx
+location /blog/ {
+    alias /var/www/tiphia-frontend/dist/;
+    try_files $uri $uri/ /blog/index.html;
+}
+```
+
+如果同源 API 仍然使用 `/api/`，`VITE_TIPHIA_API_BASE` 可以继续留空；如果 API 也在子路径，例如 `/blog-api/`，则需要显式设置 `VITE_TIPHIA_API_BASE=/blog-api`。
+
+### 前端静态缓存策略
+
+Vite 产物中的 `assets/app-*.js` 带 hash，可以长缓存；`index.html` 不建议长缓存，否则用户可能一直加载旧 JS：
+
+```nginx
+location = /index.html {
+    add_header Cache-Control "no-cache";
+}
+
+location /assets/ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+}
+```
+
+每次发布后应全量覆盖 `dist/`，并清理 CDN 中的 `index.html`。如果控制台仍显示旧文件名，例如旧的 `app-Bh1UFQ3F.js`，说明浏览器或 CDN 仍在使用旧入口文件。
 ### 常见错误
 
 如果浏览器控制台出现：
