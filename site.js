@@ -62,7 +62,8 @@ const groups = [
     pages: [
       { id: "contributing", title: "协作与提交规范", file: "docs/development/CONTRIBUTING.md" },
     ],
-  },  {
+  },
+  {
     title: "迁移",
     pages: [
       { id: "migration", title: "从 Typecho 迁移", file: "docs/migration/TYPECHO_MIGRATION.md" },
