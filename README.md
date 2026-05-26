@@ -16,7 +16,7 @@ The documentation is organized by task instead of by repository internals:
 - `前端`: frontend shell, admin development, and frontend hooks.
 - `后端`: backend development and backend hooks.
 - `扩展生态`: plugin development, plugin config UI, theme development, and default theme configuration.
-- `协作规范`: branch model, commit message convention, merge rules, and development standards.
+- `协作说明`: branch model, commit message convention, review, release, rollback, and development standards.
 - `迁移`: Typecho migration workflow and import tool reference.
 
 ## Suggested Reading Order
@@ -42,9 +42,13 @@ For development:
 
 For contributors:
 
-1. `docs/development/CONTRIBUTING.md` for branch, commit, merge and release rules.
-2. `docs/development/DEVELOPMENT.md` for repository workflow.
-3. `docs/development/BACKEND_DEVELOPMENT.md` and `docs/development/FRONTEND.md` for code placement conventions.
+1. `docs/contributing/OVERVIEW.md` for the collaboration overview.
+2. `docs/contributing/BRANCHING.md` for branch and version rules.
+3. `docs/contributing/COMMITS.md` for commit message conventions.
+4. `docs/contributing/REVIEW_RELEASE.md` for review, release and rollback rules.
+5. `docs/development/CONTRIBUTING.md` for the full legacy combined guide.
+6. `docs/development/DEVELOPMENT.md` for repository workflow.
+7. `docs/development/BACKEND_DEVELOPMENT.md` and `docs/development/FRONTEND.md` for code placement conventions.
 
 For extension authors:
 
@@ -75,3 +79,5 @@ No build step is required. The site uses `index.html`, `site.js`, and `styles.cs
 4. Branch: `main`, folder: `/root`.
 
 `.nojekyll` is included so GitHub Pages serves files as plain static assets.
+
+

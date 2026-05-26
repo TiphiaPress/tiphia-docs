@@ -62,3 +62,12 @@ theme:default:config
 ## 图片与表格
 
 默认主题会限制文章图片宽度，居中展示，并将 Markdown 图片 alt 文本作为下方说明。表格带边框并支持横向滚动。
+## 页脚内置标识
+
+默认主题会在页脚展示一个低调的 `Powered by TiphiaPress` 标识，链接到：
+
+```text
+https://github.com/TiphiaPress/tiphia
+```
+
+这个标识不属于 `footer_items` 配置项，用户清空自定义页脚链接时它仍会保留。设计上它会跟随主题色和液态玻璃模式，不应比备案、标签云、又拍云联盟信息更突兀。

@@ -58,9 +58,13 @@ const groups = [
     ],
   },
   {
-    title: "协作规范",
+    title: "协作说明",
     pages: [
-      { id: "contributing", title: "协作与提交规范", file: "docs/development/CONTRIBUTING.md" },
+      { id: "contributing", title: "协作说明总览", file: "docs/contributing/OVERVIEW.md" },
+      { id: "branching", title: "分支与版本管理", file: "docs/contributing/BRANCHING.md" },
+      { id: "commits", title: "Git 提交规范", file: "docs/contributing/COMMITS.md" },
+      { id: "review-release", title: "评审、发布与回滚", file: "docs/contributing/REVIEW_RELEASE.md" },
+      { id: "contributing-legacy", title: "完整协作规范", file: "docs/development/CONTRIBUTING.md" },
     ],
   },
   {
@@ -233,4 +237,5 @@ function safeHref(href) {
 function escapeHtml(value) {
   return value.replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char]));
 }
+
 
