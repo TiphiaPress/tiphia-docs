@@ -10,7 +10,9 @@ TiphiaPress 推荐后端和前端分开部署。后端只提供 API、认证、�
 sudo mkdir -p /opt/tiphia/{data,logs,config}
 sudo cp tiphia.example.toml /opt/tiphia/config/tiphia.toml
 ```
-容器内后端进程使用非 root 用户运行。镜像固定用户为 UID/GID `10001`，因此宿主机持久目录需要授予该用户写入权限：
+容器启动时会自动修正 `/app/data` 和 `/app/logs` 的权限，然后降权为 `tiphia` 用户运行。镜像内 `tiphia` 用户固定为 UID/GID `10001`。
+
+如果你使用旧镜像，或宿主机安全策略禁止容器修改挂载目录权限，可以手动执行：
 
 ```bash
 sudo chown -R 10001:10001 /opt/tiphia/data /opt/tiphia/logs
@@ -96,6 +98,51 @@ Windows PowerShell 示例：
 | `TIPHIA_JWT_SECRET` | `auth.jwt_secret` | 推荐通过环境变量注入生产 secret。 |
 | `TIPHIA_CORS_ALLOWED_ORIGINS` | `cors.allowed_origins` | 逗号分隔的前端来源列表。 |
 | `TIPHIA_REDIS_URL` | `rate_limit.redis_url` | Redis 限流地址。 |
+
+### 只使用配置文件
+
+如果你希望 release 环境完全由 `tiphia.toml` 管理，可以把 `jwt_secret`、数据库、日志、CORS、Redis 等全部写入配置文件，然后启动时不再传 `DATABASE_URL`、`TIPHIA_JWT_SECRET`、`TIPHIA_CORS_ALLOWED_ORIGINS`、`TIPHIA_REDIS_URL` 等覆盖变量。
+
+Docker 推荐仍然把配置文件挂载到镜像默认工作目录的 `/app/tiphia.toml`：
+
+```bash
+docker run -d \
+  --name tiphia \
+  --restart unless-stopped \
+  -p 7999:3000 \
+  -v /etc/tiphia/config/tiphia.toml:/app/tiphia.toml:ro \
+  -v /etc/tiphia/data:/app/data \
+  -v /etc/tiphia/logs:/app/logs \
+  tiphia:latest
+```
+
+这种方式下需要确保配置文件里至少包含：
+
+```toml
+[app]
+environment = "production"
+
+[http]
+bind = "0.0.0.0:3000"
+
+[cors]
+allowed_origins = ["https://posts.example.com"]
+
+[database]
+url = "sqlite:///app/data/tiphia.db?mode=rwc"
+
+[log]
+directory = "/app/logs"
+json = true
+
+[auth]
+jwt_secret = "replace-with-a-long-random-secret"
+
+[rate_limit]
+redis_url = ""
+```
+
+注意：环境变量优先级高于配置文件。如果你已经在 `docker run`、`docker compose.yml`、systemd 或宿主机环境里设置了同名覆盖变量，最终生效的会是环境变量，而不是 TOML。
 
 ## Docker Release 部署
 
@@ -363,16 +410,84 @@ TIPHIA_CONFIG=/opt/tiphia/config/tiphia.toml ./target/release/tiphia
 initializing rolling file appender failed: failed to create log file: Permission denied
 ```
 
-说明 `/app/logs` 对容器内的 `tiphia` 用户不可写。修复宿主机挂载目录权限：
+说明 `/app/logs` 对容器内的 `tiphia` 用户不可写。新版镜像会在启动时自动修正 `/app/data` 和 `/app/logs` 权限；如果你仍然看到这个错误，通常是还在运行旧镜像，或者容器不是用默认 entrypoint 启动。
+
+推荐重新构建并重建容器：
 
 ```bash
-sudo mkdir -p /opt/tiphia/data /opt/tiphia/logs
-sudo chown -R 10001:10001 /opt/tiphia/data /opt/tiphia/logs
-sudo chmod 750 /opt/tiphia/data /opt/tiphia/logs
+docker build -t tiphia:latest .
+docker rm -f tiphia
+docker run -d \
+  --name tiphia \
+  --restart unless-stopped \
+  -p 7999:3000 \
+  -e TIPHIA_CONFIG=/app/tiphia.toml \
+  -e TIPHIA_ENV=production \
+  -e TIPHIA_BIND=0.0.0.0:3000 \
+  -e TIPHIA_CORS_ALLOWED_ORIGINS="https://posts.cairbin.top" \
+  -v /etc/tiphia/config/tiphia.toml:/app/tiphia.toml:ro \
+  -v /etc/tiphia/data:/app/data \
+  -v /etc/tiphia/logs:/app/logs \
+  tiphia:latest
+```
+
+如果暂时不重建镜像，可以手动修复宿主机目录权限：
+
+```bash
+sudo mkdir -p /etc/tiphia/data /etc/tiphia/logs
+sudo chown -R 10001:10001 /etc/tiphia/data /etc/tiphia/logs
+sudo chmod 750 /etc/tiphia/data /etc/tiphia/logs
 docker restart tiphia
 ```
 
-如果使用 Docker 命名 volume 而不是宿主机目录，通常不会遇到这个问题，因为镜像构建时已经为 `/app/data` 和 `/app/logs` 设置了容器内权限。
+如果使用 Docker 命名 volume 而不是宿主机目录，通常不会遇到这个问题。
+
+## Nginx 反向代理
+
+推荐生产部署采用“前端静态资源 + 同源 `/api/` 反代后端”的方式：
+
+- 用户访问 `https://posts.example.com/` 时由 Nginx 返回前端静态文件。
+- 用户访问 `https://posts.example.com/api/...` 时由 Nginx 转发到后端容器或后端进程。
+- 前端构建时 `VITE_TIPHIA_API_BASE` 留空，浏览器会自动请求同源 `/api/v1/...`。
+
+一个完整 Nginx server 示例：
+
+```nginx
+server {
+    listen 80;
+    server_name posts.example.com;
+
+    root /var/www/tiphia-frontend/dist;
+    index index.html;
+
+    client_max_body_size 1m;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:7999;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Authorization $http_authorization;
+        proxy_read_timeout 30s;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+注意事项：
+
+- `location / { try_files ... /index.html; }` 是 SPA 必需配置，否则直接访问 `/admin`、`/posts/xxx` 会 404。
+- `proxy_pass http://127.0.0.1:7999;` 里的端口应当是后端在宿主机暴露的端口，例如 `docker run -p 7999:3000`。
+- `Authorization` 请求头必须转发，否则后台登录后的鉴权接口会出现 401。
+- 如果前后端同源，后端 CORS 可以只填写这个前端来源；如果完全同源反代，浏览器不会触发跨域，但保留正确 CORS 仍然有利于排查和扩展。
+- 静态资源更新后，如果使用 CDN 或浏览器强缓存，要清理缓存并确认页面加载的是新的 `dist/assets/app-*.js`。
+
+如果你把 API 单独部署在 `https://api.example.com`，则不需要同源 `/api/` 反代，但后端 `cors.allowed_origins` 必须包含前端域名。
 
 ## 前端部署
 
@@ -384,14 +499,84 @@ yarn install
 yarn build
 ```
 
-构建结果在 `dist/`。构建前设置后端 API 地址：
+构建结果在 `dist/`，可以交给 Nginx、对象存储、CDN、Cloudflare Pages、Vercel 等静态托管。
+
+### API 地址配置方式
+
+前端 API 地址有三种常见配置方式。
+
+#### 方式一：同源反代，推荐
+
+`.env` 或 `.env.production` 中留空：
+
+```bash
+VITE_TIPHIA_API_BASE=
+VITE_TIPHIA_FRONTEND_BASE=/
+```
+
+构建后前端会请求：
+
+```text
+/api/v1/auth/status
+/api/v1/geetest/config
+/api/v1/plugins
+```
+
+这要求 Nginx 按上面的示例把 `/api/` 反代到后端。这个方式最不容易遇到 CORS 和浏览器本机 `127.0.0.1` 问题。
+
+#### 方式二：构建时指定独立 API 域名
+
+适合前端和后端不在同一域名：
+
+```bash
+VITE_TIPHIA_API_BASE=https://api.example.com yarn build
+```
+
+或者写入 `.env.production`：
 
 ```bash
 VITE_TIPHIA_API_BASE=https://api.example.com
+VITE_TIPHIA_FRONTEND_BASE=/
 ```
 
-如果前端和后端跨域，后端 `cors.allowed_origins` 或 `TIPHIA_CORS_ALLOWED_ORIGINS` 必须包含前端来源。
+注意不要写末尾斜杠。后端配置中必须允许前端来源：
 
+```toml
+[cors]
+allowed_origins = ["https://posts.example.com"]
+```
+
+#### 方式三：运行时覆盖，不重新构建
+
+如果你希望同一份 `dist/` 在不同环境复用，可以在 `index.html` 的应用脚本前注入：
+
+```html
+<script>
+  window.__TIPHIA_API_BASE__ = "https://api.example.com";
+</script>
+```
+
+`window.__TIPHIA_API_BASE__` 的优先级高于构建时的 `VITE_TIPHIA_API_BASE`。如果留空或不设置，则使用同源请求。
+
+### 常见错误
+
+如果浏览器控制台出现：
+
+```text
+GET http://127.0.0.1:3000/api/v1/auth/status net::ERR_CONNECTION_REFUSED
+```
+
+说明前端构建产物里仍然包含开发环境 API 地址。处理方式：
+
+1. 检查 `.env`、`.env.production`、CI/CD 环境变量里是否还有 `VITE_TIPHIA_API_BASE=http://127.0.0.1:3000`。
+2. 同源反代部署时把 `VITE_TIPHIA_API_BASE` 设为空。
+3. 重新执行 `yarn build`。
+4. 全量覆盖线上 `dist/`，并清理浏览器/CDN 缓存。
+5. 在构建产物中搜索确认没有旧地址：
+
+```bash
+rg "127\.0\.0\.1:3000" dist
+```
 ## 初始化 Root 用户
 
 第一次启动后，通过 API 创建最高管理员 root：
