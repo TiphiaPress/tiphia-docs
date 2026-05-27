@@ -92,3 +92,55 @@ https://github.com/TiphiaPress/tiphia
 主题配置中没有独立的 loading 开关。加载动画属于默认主题基础体验，如果用户希望完全替换加载效果，应通过自定义主题实现自己的 `BootstrapLoading` 和 `State` 组件。
 
 动画兼容 `prefers-reduced-motion`，当用户系统设置减少动态效果时，shimmer 和旋转动画会停止。
+
+## Cookie 提示
+
+默认主题支持首次访问 Cookie 提示。该功能默认关闭，只有主题配置中 `cookie_notice` 为 `true` 时才显示。
+
+示例：
+
+```json
+{
+  "cookie_notice": true,
+  "cookie_notice_text": "本站会使用 Cookie 或本地存储来保存登录状态、评论表单和偏好设置。",
+  "cookie_notice_accept_text": "知道了",
+  "cookie_notice_policy_url": "/pages/privacy"
+}
+```
+
+字段说明：
+
+- `cookie_notice`：是否启用 Cookie 提示，必须为 `true` 才显示。
+- `cookie_notice_text`：提示正文。为空时使用默认文案。
+- `cookie_notice_accept_text`：确认按钮文字。为空时使用 `知道了`。
+- `cookie_notice_policy_url`：可选的隐私说明或 Cookie 政策链接。为空时不显示“了解更多”。
+
+用户点击确认后，默认主题会在浏览器 `localStorage` 中写入 `tiphia.default.cookie_notice.accepted=1`，之后不再重复弹出。该状态仅保存在当前浏览器中，不会写入后端数据库。
+
+如果你开发自定义主题，可以自行实现 Cookie 提示，也可以完全不提供。Cookie 提示属于主题 UI，不属于后端核心能力。
+
+## 站点公告
+
+默认主题支持首页公告横幅。该功能默认关闭，只有 `announcement_enabled` 为 `true`，且标题或内容至少填写一项时才会展示。
+
+示例：
+
+```json
+{
+  "announcement_enabled": true,
+  "announcement_title": "站点公告",
+  "announcement_content": "这里是一条简短公告，可以用于维护通知、活动提示或重要链接。",
+  "announcement_url": "/posts/hello-world",
+  "announcement_link_text": "查看详情"
+}
+```
+
+字段说明：
+
+- `announcement_enabled`：是否启用首页公告。
+- `announcement_title`：公告标题，可为空。
+- `announcement_content`：公告正文，可为空。
+- `announcement_url`：可选链接，支持站内路径或外部 URL。
+- `announcement_link_text`：链接文字。为空时默认显示 `查看详情`。
+
+公告显示在首页 Hero 区域之后、搜索框之前。它是默认主题的 UI 能力，不依赖后端专用接口。
