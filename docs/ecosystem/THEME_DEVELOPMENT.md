@@ -254,3 +254,75 @@ git submodule add https://github.com/TiphiaPress/tiphia-default-themes src/theme
 - 数组配置要过滤非法项，例如 `nav_pages` 中缺少 `label` 或 `slug` 的项应忽略。
 
 默认主题配置 Panel 应尽量覆盖常用字段，避免要求用户手写 JSON。
+## BootstrapLoading 启动加载视图
+
+主题可以导出可选的 `BootstrapLoading` 组件，用于博客刚打开、基础数据尚未返回时的首屏占位。这个能力可以避免主题在没有数据时显示空标题、空导航或空标签云。
+
+主题对象示例：
+
+```tsx
+import type { BlogTheme } from "../types";
+import { DefaultThemeLayout } from "./index";
+import { DefaultBootstrapLoading } from "./components/BootstrapLoading";
+import { views } from "./views";
+
+const theme: BlogTheme = {
+  name: "default",
+  BootstrapLoading: DefaultBootstrapLoading,
+  Layout: DefaultThemeLayout,
+  views,
+};
+
+export default theme;
+```
+
+`BootstrapLoading` 的职责：
+
+- 展示首屏加载动画或骨架屏。
+- 让用户感知页面正在加载，而不是看到空白页面。
+- 保持主题风格一致，例如颜色、圆角、间距、卡片形态。
+
+`BootstrapLoading` 不应该做的事：
+
+- 不要直接请求 API。
+- 不要依赖 `settings`、`terms`、`plugins` 等还没有返回的数据。
+- 不要注册或执行插件 Hook。
+- 不要写入全局状态。
+
+推荐结构：
+
+```tsx
+export function MyThemeBootstrapLoading() {
+  return (
+    <div className="my-theme-loading" aria-busy="true" aria-live="polite">
+      <header className="loading-header" />
+      <main>
+        <section className="loading-hero" />
+        <section className="loading-posts" />
+      </main>
+    </div>
+  );
+}
+```
+
+推荐 CSS：
+
+```css
+@keyframes loading-shimmer {
+  from { background-position: 140% 0; }
+  to { background-position: -140% 0; }
+}
+
+.loading-line {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e5e7eb, #f8fafc, #e5e7eb);
+  background-size: 240% 100%;
+  animation: loading-shimmer 1.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-line { animation: none; }
+}
+```
+
+如果主题不提供 `BootstrapLoading`，前端会使用默认主题的启动加载视图作为兜底。生产主题仍建议显式提供，因为不同主题的版式差异较大，兜底加载视图可能与最终页面视觉不一致。

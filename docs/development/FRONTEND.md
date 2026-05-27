@@ -234,3 +234,54 @@ VITE_TIPHIA_API_BASE=
 - 不要让主题去读取 `/themes/<name>/favicon.ico` 这种外部约定；主题 registry 应显式导入并提供 `faviconUrl`。
 
 这样主题仓库被复制或作为 Git submodule 放入前端仓库时，文件不会散落到其它目录，后续升级也更容易。
+## 启动加载与主题边界
+
+博客前端遵循“骨架取数据，主题负责渲染”的边界：
+
+- `src/blog/components/Layout.tsx` 负责请求站点设置、分类标签和已启用插件列表。
+- `src/themes/index.ts` 负责自动发现 `src/themes/*/index.tsx` 中导出的主题。
+- 主题的 `Layout` 负责页面外壳、导航、页脚、Hook 插槽和视觉呈现。
+- 页面级数据，例如文章列表、文章详情、归档列表、评论，由 `src/blog/pages/*` 请求后交给当前主题的 `views` 渲染。
+
+首屏加载时，设置和分类标签尚未返回。如果直接渲染主题外壳，会出现标题、导航、页脚或标签云短暂空白的问题。因此主题可以提供一个可选的启动加载视图：
+
+```ts
+export interface BlogTheme {
+  name: string;
+  faviconUrl?: string;
+  ConfigPanel?: ThemeConfigPanel;
+  BootstrapLoading?: ComponentType;
+  Layout: BlogThemeLayout;
+  views: BlogThemeViews;
+}
+```
+
+当前行为：
+
+- 当 `settings` 或 `terms` 首次加载中且没有缓存数据时，博客骨架会渲染 `theme.BootstrapLoading`。
+- 如果当前主题没有提供 `BootstrapLoading`，会回退到默认主题的加载视图。
+- 一旦基础数据返回，骨架切换到主题 `Layout`，并把数据作为 props 传入。
+- 页面内部的加载状态仍然由主题 `views.State` 和各个视图组件负责，例如文章列表、归档、时间线和评论区。
+
+主题作者应把 `BootstrapLoading` 设计成轻量、无数据依赖、无副作用的组件。它不应该请求 API，也不应该读取业务状态。推荐使用骨架屏、轻量 shimmer、spinner 或品牌化 loading 动画。
+
+### 加载 UI 设计建议
+
+- 首屏加载视图应尽量模拟最终布局，例如站点头部、搜索框、文章卡片和侧栏占位。
+- 避免只显示纯文字“加载中”，这样在慢网络下会显得页面未完成。
+- 避免在加载视图中执行插件 Hook，因为插件列表也可能尚未加载完成。
+- 保持 `prefers-reduced-motion` 兼容，用户关闭动画时应停止 shimmer 或旋转动画。
+- 加载视图不要依赖 `settings.data`，否则会重新引入空数据问题。
+
+### 页面级加载状态
+
+页面级加载由主题视图处理。默认主题的 `State` 组件会展示轻量 spinner 和骨架线，用于：
+
+- 首页文章列表加载。
+- 文章或页面详情加载。
+- 分类、标签目录加载。
+- 归档列表加载。
+- 时间线加载。
+- 注册状态读取。
+
+插件如果要在自己的前端面板或公开组件中展示加载状态，也建议复用自己的局部 loading，而不是依赖博客全局启动加载视图。
